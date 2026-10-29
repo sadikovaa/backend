@@ -1,28 +1,38 @@
 package com.kholopova.backend.d_waitgroup;
 
-import com.kholopova.backend.internal.Futex;
-
 import java.util.concurrent.atomic.AtomicInteger;
+import com.kholopova.backend.internal.Futex;
 
 public class WaitGroup {
   private final AtomicInteger count = new AtomicInteger();
 
   public void add(int delta) {
-    count.addAndGet(delta);
-  }
-
-  public void done() {
-    if (count.decrementAndGet() < 0) {
-      throw new IllegalStateException("паника");
+    while (true) {
+      int current = count.get();
+      long next = (long) current + delta;
+      if (next < 0 || next > Integer.MAX_VALUE) {
+        throw new IllegalStateException("паника");
+      }
+      if (count.compareAndSet(current, (int) next)) {
+        if (next == 0) {
+          Futex.wakeAll(count);
+        }
+        return;
+      }
     }
   }
 
+  public void done() {
+    add(-1);
+  }
+
   public void await() {
-    if (count.get() != 0) {
-      Futex.wait(count, 0);
-      while (count.get() != 0) {
+    while (true) {
+      int current = count.get();
+      if (current == 0) {
+        return;
       }
-      Futex.wakeAll(count);
+      Futex.wait(count, current);
     }
   }
 }

@@ -12,39 +12,49 @@ public class RWMutex {
 
   public void rLock() {
     while (true) {
-      int count = state.get();
-      if (count == WRITER) {
-        Futex.wait(state, count);
+      int current = state.get();
+      if ((current & WRITER) != 0) {
+        Futex.wait(state, current);
         continue;
       }
-      if (state.compareAndSet(count, count + 1)) {
+      if (state.compareAndSet(current, current + 1)) {
         return;
       }
     }
   }
 
   public void rUnlock() {
-    int count = state.decrementAndGet();
-    if (count < 0) {
-      throw new IllegalStateException("паника");
-    }
-    if (count == 0) {
-      Futex.wakeAll(state);
+    while (true) {
+      int current = state.get();
+      if ((current & WRITER) != 0 || current == FREE) {
+        throw new IllegalStateException("паника");
+      }
+      if (state.compareAndSet(current, current - 1)) {
+        if (current == 1) {
+          Futex.wakeAll(state);
+        }
+        return;
+      }
     }
   }
 
   public void lock() {
-    while (!state.compareAndSet(FREE, WRITER)) {
-      Futex.wait(state, WRITER);
+    while (true) {
+      int current = state.get();
+      if (current == FREE) {
+        if (state.compareAndSet(FREE, WRITER)) {
+          return;
+        }
+        continue;
+      }
+      Futex.wait(state, current);
     }
   }
 
   public void unlock() {
-    int previous = state.getAndSet(FREE);
-    if (previous == WRITER) {
-      Futex.wakeAll(state);
-    } else if (previous == FREE) {
+    if (!state.compareAndSet(WRITER, FREE)) {
       throw new IllegalStateException("паника");
     }
+    Futex.wakeAll(state);
   }
 }
