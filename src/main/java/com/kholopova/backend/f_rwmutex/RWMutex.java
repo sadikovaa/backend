@@ -1,24 +1,33 @@
 package com.kholopova.backend.f_rwmutex;
 
-import com.kholopova.backend.internal.Futex;
-
 import java.util.concurrent.atomic.AtomicInteger;
+import com.kholopova.backend.internal.Futex;
 
 public class RWMutex {
   static final int WRITER = 1 << 31;
   static final int FREE = 0;
 
   private final AtomicInteger state = new AtomicInteger();
+  private final AtomicInteger waitingWriters = new AtomicInteger();
 
   public void rLock() {
     while (true) {
       int current = state.get();
-      if ((current & WRITER) != 0) {
+      if ((current & WRITER) != 0 || waitingWriters.get() > 0) {
         Futex.wait(state, current);
         continue;
       }
-      if (state.compareAndSet(current, current + 1)) {
+      if (current == Integer.MAX_VALUE) {
+        throw new IllegalStateException("паника");
+      }
+      if (!state.compareAndSet(current, current + 1)) {
+        continue;
+      }
+      if (waitingWriters.get() == 0) {
         return;
+      }
+      if (state.decrementAndGet() == 0) {
+        Futex.wakeAll(state);
       }
     }
   }
@@ -39,12 +48,18 @@ public class RWMutex {
   }
 
   public void lock() {
+    boolean inWaitingWriters = false;
     while (true) {
       int current = state.get();
-      if (current == FREE) {
-        if (state.compareAndSet(FREE, WRITER)) {
-          return;
+      if (current == FREE && state.compareAndSet(FREE, WRITER)) {
+        if (inWaitingWriters) {
+          waitingWriters.decrementAndGet();
         }
+        return;
+      }
+      if (!inWaitingWriters) {
+        waitingWriters.incrementAndGet();
+        inWaitingWriters = true;
         continue;
       }
       Futex.wait(state, current);
