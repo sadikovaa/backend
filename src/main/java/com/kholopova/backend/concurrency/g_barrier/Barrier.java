@@ -1,6 +1,6 @@
-package com.kholopova.backend.g_barrier;
+package com.kholopova.backend.concurrency.g_barrier;
 
-import com.kholopova.backend.internal.Futex;
+import com.kholopova.backend.concurrency.internal.Futex;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

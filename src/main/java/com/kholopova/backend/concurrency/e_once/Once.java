@@ -1,6 +1,6 @@
-package com.kholopova.backend.e_once;
+package com.kholopova.backend.concurrency.e_once;
 
-import com.kholopova.backend.internal.Futex;
+import com.kholopova.backend.concurrency.internal.Futex;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

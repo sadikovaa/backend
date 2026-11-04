@@ -1,4 +1,4 @@
-package com.kholopova.backend.b_mutex;
+package com.kholopova.backend.concurrency.b_mutex;
 
 import java.util.ArrayList;
 import java.util.List;

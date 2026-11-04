@@ -1,7 +1,7 @@
-package com.kholopova.backend.b_mutex;
+package com.kholopova.backend.concurrency.b_mutex;
 
-import com.kholopova.backend.a_spinlock.Locker;
-import com.kholopova.backend.internal.Futex;
+import com.kholopova.backend.concurrency.a_spinlock.Locker;
+import com.kholopova.backend.concurrency.internal.Futex;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

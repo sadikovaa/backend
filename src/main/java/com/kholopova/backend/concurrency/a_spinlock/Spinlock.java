@@ -1,20 +1,15 @@
-package com.kholopova.backend.a_spinlock;
+package com.kholopova.backend.concurrency.a_spinlock;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class TTAS implements Locker {
+public class Spinlock implements Locker {
+
   private final AtomicBoolean lock = new AtomicBoolean(false);
 
   @Override
   public void lock() {
-    while (true) {
-      while (lock.get()) {
-      }
-      if (tryLock()) {
-        return;
-      }
+    while (!tryLock()) {
     }
-
   }
 
   @Override

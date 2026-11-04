@@ -1,4 +1,4 @@
-package com.kholopova.backend.c_semaphore;
+package com.kholopova.backend.concurrency.c_semaphore;
 
 import java.util.ArrayList;
 import java.util.List;
