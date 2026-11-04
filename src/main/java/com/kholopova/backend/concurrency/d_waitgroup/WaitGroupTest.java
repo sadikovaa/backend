@@ -1,4 +1,4 @@
-package com.kholopova.backend.d_waitgroup;
+package com.kholopova.backend.concurrency.d_waitgroup;
 
 import java.util.ArrayList;
 import java.util.List;

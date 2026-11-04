@@ -1,4 +1,4 @@
-package com.kholopova.backend.f_rwmutex;
+package com.kholopova.backend.concurrency.f_rwmutex;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -1,7 +1,7 @@
-package com.kholopova.backend.f_rwmutex;
+package com.kholopova.backend.concurrency.f_rwmutex;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import com.kholopova.backend.internal.Futex;
+import com.kholopova.backend.concurrency.internal.Futex;
 
 public class RWMutex {
   static final int WRITER = 1 << 31;

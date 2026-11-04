@@ -1,4 +1,4 @@
-package com.kholopova.backend.a_spinlock;
+package com.kholopova.backend.concurrency.a_spinlock;
 
 import java.util.ArrayList;
 import java.util.List;

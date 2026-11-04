@@ -1,4 +1,4 @@
-package com.kholopova.backend.internal;
+package com.kholopova.backend.concurrency.internal;
 
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;

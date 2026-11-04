@@ -1,7 +1,7 @@
-package com.kholopova.backend.c_semaphore;
+package com.kholopova.backend.concurrency.c_semaphore;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import com.kholopova.backend.internal.Futex;
+import com.kholopova.backend.concurrency.internal.Futex;
 
 public class Semaphore {
   private final AtomicInteger permits = new AtomicInteger();

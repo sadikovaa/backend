@@ -1,4 +1,4 @@
-package com.kholopova.backend.e_once;
+package com.kholopova.backend.concurrency.g_barrier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 /**
  * Тесты переписала на Java при помощи ИИ
  */
-public class OnceTest {
+public class BarrierTest {
     public static void main(String[] args) {
         int failed = runAll();
         System.exit(failed == 0 ? 0 : 1);
@@ -42,12 +42,10 @@ public class OnceTest {
 
     private static List<Case> cases() {
         List<Case> list = new ArrayList<>();
-        list.add(new Case("TestRunsOnlyOnce", 3_000, OnceTest::testRunsOnlyOnce));
-        list.add(new Case("TestDone", 3_000, OnceTest::testDone));
-        list.add(new Case("TestConcurrentCallsRunItOnce", 15_000, OnceTest::testConcurrentCallsRunItOnce));
-        list.add(new Case("TestDoWaitsForTheWinner", 15_000, OnceTest::testDoWaitsForTheWinner));
-        list.add(new Case("TestPanicCountsAsDone", 3_000, OnceTest::testPanicCountsAsDone));
-        list.add(new Case("TestStress", 60_000, OnceTest::testStress));
+        list.add(new Case("TestNobodyPassesEarly", 8_000, BarrierTest::testNobodyPassesEarly));
+        list.add(new Case("TestSingleParticipant", 3_000, BarrierTest::testSingleParticipant));
+        list.add(new Case("TestReusableAcrossRounds", 45_000, BarrierTest::testReusableAcrossRounds));
+        list.add(new Case("TestRoundsDoNotOverlap", 45_000, BarrierTest::testRoundsDoNotOverlap));
         return list;
     }
 
@@ -103,6 +101,15 @@ public class OnceTest {
             throw err;
         }
         return new RuntimeException(error);
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 
     /** Горутина, которая выполняет действие и позволяет дождаться её с таймаутом. */
@@ -172,42 +179,81 @@ public class OnceTest {
         }
     }
 
-    private static void testRunsOnlyOnce() {
-        Once once = new Once();
-        int[] calls = {0};
-        for (int i = 0; i < 10; i++) {
-            once.run(() -> calls[0]++);
-        }
-        if (calls[0] != 1) {
-            throw new AssertionError("функция вызвана " + calls[0] + " раз");
-        }
-    }
-
-    private static void testDone() {
-        Once once = new Once();
-        if (once.done()) {
-            throw new AssertionError("до первого Do работа не сделана");
-        }
-        once.run(() -> {
-        });
-        if (!once.done()) {
-            throw new AssertionError("после Do работа сделана");
-        }
-    }
-
-    private static void testConcurrentCallsRunItOnce() {
-        Once once = new Once();
-        AtomicInteger calls = new AtomicInteger();
+    private static void testNobodyPassesEarly() {
+        Barrier barrier = new Barrier(3);
+        AtomicInteger passed = new AtomicInteger();
         Throwable[] error = {null};
-        Thread[] threads = startWorkers(100, () -> once.run(() -> {
-            calls.incrementAndGet();
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
+
+        startWorkers(2, () -> {
+            barrier.await();
+            passed.incrementAndGet();
+        }, error);
+
+        sleep(100);
+        int early = passed.get();
+        if (early != 0) {
+            throw new AssertionError(early + " участников прошли барьер до прихода всех");
+        }
+        if (error[0] != null) {
+            throw asRuntime(error[0]);
+        }
+
+        Task<Void> last = Task.start(() -> {
+            barrier.await();
+            passed.incrementAndGet();
+            return null;
+        });
+        try {
+            if (!last.finished(2000)) {
+                throw new AssertionError("последний участник не прошёл барьер");
             }
-        }), error);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (passed.get() != 3 && System.nanoTime() < deadline) {
+            if (error[0] != null) {
+                throw asRuntime(error[0]);
+            }
+            sleep(1);
+        }
+        int got = passed.get();
+        if (got != 3) {
+            throw new AssertionError("барьер прошли " + got + " из 3");
+        }
+    }
+
+    private static void testSingleParticipant() {
+        Barrier barrier = new Barrier(1);
+        Task<Void> waiting = Task.start(() -> {
+            barrier.await();
+            return null;
+        });
+        try {
+            if (!waiting.finished(1000)) {
+                throw new AssertionError("барьер на одного не должен блокировать");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void testReusableAcrossRounds() {
+        final int parties = 6;
+        final int rounds = 50;
+        Barrier barrier = new Barrier(parties);
+        AtomicInteger passes = new AtomicInteger();
+        Throwable[] error = {null};
+
+        Thread[] threads = startWorkers(parties, () -> {
+            for (int r = 0; r < rounds; r++) {
+                barrier.await();
+                passes.incrementAndGet();
+            }
+        }, error);
 
         Task<Void> all = Task.start(() -> {
             try {
@@ -219,98 +265,65 @@ public class OnceTest {
             return null;
         });
         try {
-            if (!all.finished(10_000)) {
-                throw new AssertionError("часть горутин зависла в Do");
+            if (!all.finished(30_000)) {
+                throw new AssertionError("барьер завис между раундами");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
-        int got = calls.get();
-        if (got != 1) {
-            throw new AssertionError("функция вызвана " + got + " раз");
+
+        int got = passes.get();
+        int want = parties * rounds;
+        if (got != want) {
+            throw new AssertionError("проходов " + got + ", ожидалось " + want);
         }
     }
 
-    private static void testDoWaitsForTheWinner() {
-        Once once = new Once();
-        AtomicInteger ready = new AtomicInteger();
+    private static void testRoundsDoNotOverlap() {
+        final int parties = 4;
+        final int rounds = 100;
+        Barrier barrier = new Barrier(parties);
+        AtomicInteger inRound = new AtomicInteger();
+        AtomicInteger bad = new AtomicInteger();
+        Throwable[] error = {null};
 
-        Task<Void> first = Task.start(() -> {
-            once.run(() -> {
+        Thread[] threads = startWorkers(parties, () -> {
+            for (int r = 0; r < rounds; r++) {
+                barrier.await();
+                if (inRound.incrementAndGet() > parties) {
+                    bad.set(1);
+                }
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(0, 1000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException(e);
                 }
-                ready.set(1);
-            });
-            return null;
-        });
-
-        try {
-            Thread.sleep(10);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
-        }
-
-        Task<Void> second = Task.start(() -> {
-            once.run(() -> {
-            });
-            if (ready.get() != 1) {
-                throw new AssertionError("Do вернулся до того, как работа была закончена");
+                inRound.decrementAndGet();
             }
-            return null;
-        });
+        }, error);
 
-        try {
-            if (!first.finished(5000)) {
-                throw new AssertionError("первый Do завис");
-            }
-            if (!second.finished(5000)) {
-                throw new AssertionError("второй Do завис");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void testPanicCountsAsDone() {
-        Once once = new Once();
-        int[] calls = {0};
-        try {
-            once.run(() -> {
-                calls[0]++;
-                throw new RuntimeException("упало");
-            });
-        } catch (RuntimeException ignored) {
-            // recover() в Go глотает панику, в том числе «не реализовано».
-        }
-        once.run(() -> calls[0]++);
-        if (calls[0] != 1) {
-            throw new AssertionError("после паники функция вызвана ещё раз: всего " + calls[0]);
-        }
-    }
-
-    private static void testStress() {
-        for (int round = 0; round < 300; round++) {
-            Once once = new Once();
-            AtomicInteger calls = new AtomicInteger();
-            Throwable[] error = {null};
-            Thread[] threads = startWorkers(16, () -> once.run(() -> calls.incrementAndGet()), error);
+        Task<Void> all = Task.start(() -> {
             try {
                 awaitWorkers(threads, error);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(e);
             }
-            int got = calls.get();
-            if (got != 1) {
-                throw new AssertionError("раунд " + round + ": вызовов " + got);
+            return null;
+        });
+        try {
+            if (!all.finished(30_000)) {
+                throw new AssertionError("тест завис");
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+
+        if (bad.get() != 0) {
+            throw new AssertionError("участники следующего раунда обогнали предыдущий");
         }
     }
 }

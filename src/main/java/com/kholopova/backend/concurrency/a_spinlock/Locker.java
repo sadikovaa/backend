@@ -1,4 +1,4 @@
-package com.kholopova.backend.a_spinlock;
+package com.kholopova.backend.concurrency.a_spinlock;
 
 public interface Locker {
   void lock();

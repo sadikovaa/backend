@@ -1,7 +1,7 @@
-package com.kholopova.backend.d_waitgroup;
+package com.kholopova.backend.concurrency.d_waitgroup;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import com.kholopova.backend.internal.Futex;
+import com.kholopova.backend.concurrency.internal.Futex;
 
 public class WaitGroup {
   private final AtomicInteger count = new AtomicInteger();
